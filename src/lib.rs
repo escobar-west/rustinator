@@ -1,7 +1,7 @@
 use std::fs;
 use std::fs::File;
 use tempfile::tempfile;
-use std::io::{self, Read, Write, BufRead, Seek, SeekFrom};
+use std::io::{self, Write, BufRead, Seek, SeekFrom};
 use std::error::Error;
 
 pub struct Config {
@@ -28,12 +28,18 @@ impl Config {
 }
 
 pub fn preprocess(in_file: &mut File) -> io::Result<File> {
-    let mut contents = String::new();
-    in_file.read_to_string(&mut contents)?;
-
     let mut tmp = tempfile()?;
 
-    tmp.write_all(contents.as_bytes())?;
+    let in_iter = io::BufReader::new(in_file)
+                      .lines()
+                      .map(|x| x.unwrap())
+                      .map(|x| remove_comments_add_linenums(x))
+                      .map(|x| expand_pseudos(x))
+                      .map(|x| load_symbols(x));
+
+    for line in in_iter {
+        writeln!(tmp, "new {}", line)?;
+    }
     writeln!(tmp, "Test")?;
     writeln!(tmp, "Test")?;
 
@@ -41,6 +47,15 @@ pub fn preprocess(in_file: &mut File) -> io::Result<File> {
     Ok(tmp)
 }
     
+fn remove_comments_add_linenums(x: String) -> String {
+    x
+}
+fn expand_pseudos(x: String) -> String {
+    x
+}
+fn load_symbols(x: String) -> String {
+    x
+}
 
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     let mut in_file = fs::File::open(config.in_file)?;
