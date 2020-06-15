@@ -21,7 +21,7 @@ impl Config {
 
         let out_file = match args.next() {
             Some(arg) => arg,
-            None => return Err("Didn't get an output file"),
+            None => String::from(format!("{}.bin", in_file)),
         };
 
         Ok(Config { in_file, out_file })
@@ -36,7 +36,8 @@ pub fn preprocess(in_file: &mut File) -> io::Result<File> {
                       .map(|x| x.unwrap())
                       .map(|x| remove_comments(x))
                       .map(|x| expand_pseudos(x))
-                      .map(|x| load_symbols(x));
+                      .map(|x| load_symbols(x))
+                      .map(|x| collect_whites(x));
 
     let mut line_num = 0;
 
@@ -62,6 +63,9 @@ fn expand_pseudos(x: String) -> String {
 }
 fn load_symbols(x: String) -> String {
     x
+}
+fn collect_whites(x: String) -> String {
+    x.split_whitespace().collect::<Vec<&str>>().join(" ")
 }
 
 struct Label {
