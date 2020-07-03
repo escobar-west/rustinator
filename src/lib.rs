@@ -2,7 +2,6 @@ mod preprocess;
 
 use std::fs;
 use std::string::String;
-use std::fs::File;
 use std::io::{self, Write, BufRead};
 use std::error::Error;
 
@@ -36,12 +35,12 @@ struct Label {
 }
 
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
-    let mut in_file = fs::File::open(config.in_file)?;
-    let tmp = preprocess::preprocess(&mut in_file)?;
+    let in_file = fs::File::open(config.in_file)?;
+    let tmp = preprocess::preprocess(&in_file)?;
 
     println!("Finished preprocessing");
 
-    let mut out_file = fs::File::create(config.out_file)?;
+    let mut out_file = fs::File::create(&config.out_file)?;
 
     for line in io::BufReader::new(tmp).lines() {
         match line {
