@@ -4,24 +4,15 @@ use std::fs::File;
 use tempfile::tempfile;
 use std::io::{self, Write, BufRead, Seek, SeekFrom};
 
-fn expand_includes(in_file: &File) -> io::Result<File> {
+fn expand_includes(in_file_path: String) -> io::Result<File> {
     let mut incl_queue = VecDeque::<String>::new();
     let mut incl_set = HashSet::<String>::new();
+
+    incl_queue.push_back(in_file_path.clone());
+    incl_set.insert(in_file_path);
+
     let mut out_file = tempfile()?;
 
-    for line in io::BufReader::new(in_file).lines() {
-        let line = line.unwrap();
-
-        if line.starts_with(".include") {
-            let new_path = String::from(line.split('"').nth(1).unwrap());
-            if !incl_set.contains(&new_path) {
-                incl_queue.push_back(new_path.clone());
-                incl_set.insert(new_path);
-            }
-        } else {
-            writeln!(out_file, "{}", line)?;
-        }
-    }
     while let Some(path) = incl_queue.pop_front() {
         let incl_file = File::open(path)?;
         for line in io::BufReader::new(incl_file).lines() {
@@ -42,8 +33,8 @@ fn expand_includes(in_file: &File) -> io::Result<File> {
 }
     
 
-pub fn preprocess(in_file: &File) -> io::Result<File> {
-    let tmp = expand_includes(in_file)?;
+pub fn preprocess(in_file_path: String) -> io::Result<File> {
+    let tmp = expand_includes(in_file_path)?;
 
     let in_iter = io::BufReader::new(tmp)
                       .lines()
