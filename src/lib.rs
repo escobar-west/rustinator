@@ -1,8 +1,9 @@
+mod preprocess;
+
 use std::fs;
 use std::string::String;
 use std::fs::File;
-use tempfile::tempfile;
-use std::io::{self, Write, BufRead, Seek, SeekFrom};
+use std::io::{self, Write, BufRead};
 use std::error::Error;
 
 pub struct Config {
@@ -21,52 +22,13 @@ impl Config {
 
         let out_file = match args.next() {
             Some(arg) => arg,
-            None => String::from(format!("{}.bin", in_file)),
+            None => String::from("a.bin"),
         };
 
         Ok(Config { in_file, out_file })
     }
 }
 
-pub fn preprocess(in_file: &mut File) -> io::Result<File> {
-    let mut tmp = tempfile()?;
-
-    let in_iter = io::BufReader::new(in_file)
-                      .lines()
-                      .map(|x| x.unwrap())
-                      .map(|x| remove_comments(x))
-                      .map(|x| expand_pseudos(x))
-                      .map(|x| load_symbols(x))
-                      .map(|x| collect_whites(x));
-
-    let mut line_num = 0;
-
-    for line in in_iter {
-        let line = line.as_str().trim();
-        match line {
-            "" => (),
-            _ =>  {
-                writeln!(tmp, "{}|{}", line_num, line)?;
-                line_num += 1;
-            }
-        }
-    }
-    tmp.seek(SeekFrom::Start(0))?;
-    Ok(tmp)
-}
-    
-fn remove_comments(x: String) -> String {
-    String::from(x.split(';').next().unwrap())
-}
-fn expand_pseudos(x: String) -> String {
-    x
-}
-fn load_symbols(x: String) -> String {
-    x
-}
-fn collect_whites(x: String) -> String {
-    x.split_whitespace().collect::<Vec<&str>>().join(" ")
-}
 
 struct Label {
     name: String,
@@ -75,13 +37,18 @@ struct Label {
 
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     let mut in_file = fs::File::open(config.in_file)?;
-    let tmp = preprocess(&mut in_file)?;
+    let tmp = preprocess::preprocess(&mut in_file)?;
 
     println!("Finished preprocessing");
 
+    let mut out_file = fs::File::create(config.out_file)?;
+
     for line in io::BufReader::new(tmp).lines() {
         match line {
-            Ok(data) => println!("{}", data),
+            Ok(data) => {
+                println!("{}", data);
+                writeln!(out_file, "{}", data)?;
+            }
             Err(e) => return Err(Box::new(e)),
         }
     }
