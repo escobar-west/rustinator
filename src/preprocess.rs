@@ -45,12 +45,16 @@ fn expand_macros(in_file: File) -> io::Result<File> {
 
     let mut regex_list = Vec::<RegexReplacer>::new();
     let line_splitter = Regex::new(r#"(?P<mac>[^"]+)"\s*"(?P<exp>[^"]+)"#).unwrap();
-    let regex_creator = Regex::new(r#"[ ,]\w+"#).unwrap();
+    let regex_creator = Regex::new(r#"[ ,]+(?P<var>\w+)"#).unwrap();
 
     while let Ok(nbytes) = in_reader.read_line(&mut str_buf) {
         if str_buf.starts_with(".define") {
+            let aaa = line_splitter.captures(&str_buf).unwrap();
+            let bbb = regex_creator.replace_all(&aaa["mac"], "[ ,]+(?P<$var>)");
+            let macro_regex = Regex::new(bbb).unwrap();
             println!("found {}", str_buf);
-            println
+            println!("found {} in regex", &aaa["mac"]);
+            println!("created regex {}", &bbb);
             //writeln!(out_file, "{}", str_buf.split(r"\n").collect::<Vec<&str>>().join("\n"));
         } else if nbytes == 0 {
             break;
