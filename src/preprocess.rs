@@ -1,4 +1,5 @@
 use std::collections::{VecDeque, HashSet};
+use std::borrow::Cow;
 use std::string::String;
 use std::fs::File;
 use regex::Regex;
@@ -8,6 +9,19 @@ use std::io::{self, Write, BufRead, Seek, SeekFrom};
 struct RegexReplacer {
     regex: Regex,
     replace: String,
+}
+
+impl RegexReplacer {
+    fn is_match(&self, line: &str) -> bool {
+        self.regex.is_match(&line)
+    }
+
+    fn replace_macro(&self, line: &str) -> String {
+        let caps = self.regex.captures(line).unwrap();
+        let mut out_string = String::new();
+        caps.expand(&self.replace, &mut out_string);
+        out_string
+    }
 }
 
 fn expand_includes(in_file_path: String) -> io::Result<File> {
@@ -44,18 +58,35 @@ fn expand_macros(in_file: File) -> io::Result<File> {
     let mut str_buf = String::new();
 
     let mut regex_list = Vec::<RegexReplacer>::new();
-    let line_splitter = Regex::new(r#"(?P<mac>[^"]+)"\s*"(?P<exp>[^"]+)"#).unwrap();
-    let regex_creator = Regex::new(r#"[ ,]+(?P<var>\w+)"#).unwrap();
+    let line_regex = Regex::new(r#""(?P<mac>[^"]+)"\s*"(?P<exp>[^"]+)""#).unwrap();
+    let word_regex = Regex::new(r"(?P<arg>\w+)").unwrap();
 
     while let Ok(nbytes) = in_reader.read_line(&mut str_buf) {
         if str_buf.starts_with(".define") {
-            let aaa = line_splitter.captures(&str_buf).unwrap();
-            let bbb = regex_creator.replace_all(&aaa["mac"], "[ ,]+(?P<$var>)");
-            let macro_regex = Regex::new(bbb).unwrap();
-            println!("found {}", str_buf);
-            println!("found {} in regex", &aaa["mac"]);
-            println!("created regex {}", &bbb);
-            //writeln!(out_file, "{}", str_buf.split(r"\n").collect::<Vec<&str>>().join("\n"));
+            let captured_macro_line = line_regex.captures(&str_buf).unwrap();
+            println!("\nfound {}", &captured_macro_line[0]);
+            println!("found {} in regex", &captured_macro_line["mac"]);
+
+            let mut macro_vec = captured_macro_line["mac"]
+                                    .split_whitespace()
+                                    .collect::<Vec<&str>>();
+
+            let args_regex: String;
+            let mut exp_repl = String::new();
+
+            if let Some(args) = macro_vec.get_mut(1) {
+                let parsed_tokens = args.split(',').collect::<Vec<&str>>().join("|");
+                let parsed_tokens = format!(r"(?P<pre>^|[ ,])(?P<mid>{})(?P<end>$|[ ,\\])", &parsed_tokens);
+                let exp_regex = Regex::new(&parsed_tokens).unwrap();
+                exp_repl = exp_regex.replace_all(&captured_macro_line["exp"], "${pre}$${${mid}}${end}").to_string();
+
+                args_regex = word_regex.replace_all(*args, r"(?P<${arg}>\w+)").to_string();
+                *args = &args_regex;
+            }
+                println!("created new exp replace {}", &exp_repl);
+                let macro_regex = Regex::new(&macro_vec.join(" ")).unwrap();
+                regex_list.push(RegexReplacer { regex: macro_regex, replace: exp_repl });
+                
         } else if nbytes == 0 {
             break;
         }
@@ -64,9 +95,16 @@ fn expand_macros(in_file: File) -> io::Result<File> {
     in_reader.seek(SeekFrom::Start(0))?;
     let mut out_file = tempfile()?;
 
-    for line in in_reader.lines()
-                         .map(|x| x.unwrap())
-                         .filter(|x| !x.starts_with(".define")) {
+    for line in in_reader.lines().map(|x| x.unwrap()).filter(|x| !x.starts_with(".define")) {
+        for reg in &regex_list {
+            if reg.is_match(&line) {
+                //println!("before line {}, to be repl with {}", &line, &reg.replace);
+                let line = reg.replace_macro(&line);
+                //println!("after line {}", &line);
+                break;
+            }
+        }
+            
         writeln!(out_file, "{}", line)?;
     }
 
